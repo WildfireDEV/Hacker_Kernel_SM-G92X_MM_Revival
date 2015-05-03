@@ -453,6 +453,9 @@ static ssize_t store_##file_name					\
 	return ret ? ret : count;					\
 }
 
+store_one(scaling_min_freq, min);
+store_one(scaling_max_freq, max);
+
 /**
  * show_cpuinfo_cur_freq - current CPU frequency as detected by hardware
  */
@@ -1124,7 +1127,7 @@ static int cpufreq_add_dev(struct device *dev, struct subsys_interface *sif)
 	
 	if (last_min > -1)
 		policy->min = last_min;
-	
+
 	if (last_max > -1)
 		policy->max = last_max;
 
@@ -1945,7 +1948,7 @@ static int __cpufreq_set_policy(struct cpufreq_policy *data,
 		policy->user_policy.min = GLOBALKT_MIN_FREQ_LIMIT[policy->cpu];
 	if (policy->user_policy.max > GLOBALKT_MAX_FREQ_LIMIT[policy->cpu])
 		policy->user_policy.max = GLOBALKT_MAX_FREQ_LIMIT[policy->cpu];
-	//pr_alert("SET POLICY6 - NewMIN=%d - NewMAX=%d - OrigMIN=%d - OrigMAX=%d - CPU=%d\n", policy->min, policy->max, data->min, data->max, policy->cpu);
+	pr_alert("SET POLICY6 - NewMIN=%d - NewMAX=%d - OrigMIN=%d - OrigMAX=%d - CPU=%d\n", policy->min, policy->max, data->min, data->max, policy->cpu);
 
 	/* notification of the new policy */
 	blocking_notifier_call_chain(&cpufreq_policy_notifier_list,
