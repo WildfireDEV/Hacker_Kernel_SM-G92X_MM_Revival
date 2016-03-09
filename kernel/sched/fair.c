@@ -48,7 +48,7 @@
 
 /*
  * Targeted preemption latency for CPU-bound tasks:
- * (default: 5ms * (1 + ilog(ncpus)), units: nanoseconds)
+ * (default: 6ms * (1 + ilog(ncpus)), units: nanoseconds)
  *
  * NOTE: this latency value is not the same as the concept of
  * 'timeslice length' - timeslices in CFS are of variable length
@@ -1584,14 +1584,14 @@ static inline void __update_group_entity_contrib(struct sched_entity *se) {}
  * tweaking suit particular needs.
  */
 
-unsigned int hmp_up_threshold = 480;
-unsigned int hmp_down_threshold = 235;
+unsigned int hmp_up_threshold = 700;
+unsigned int hmp_down_threshold = 256;
 
 unsigned int hmp_semiboost_up_threshold = 479;
 unsigned int hmp_semiboost_down_threshold = 150;
 
 /* Global switch between power-aware migrations and classical GTS. */
-unsigned int hmp_power_migration = 1;
+unsigned int hmp_power_migration = 0;
 
 /* Performance threshold for guaranteeing an up migration. */
 unsigned int hmp_up_perf_threshold = 597;
@@ -2534,6 +2534,7 @@ static int assign_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 static void expire_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 {
 	struct cfs_bandwidth *cfs_b = tg_cfs_bandwidth(cfs_rq->tg);
+	struct rq *rq = rq_of(cfs_rq);
 
 	/* if the deadline is ahead of our clock, nothing to do */
 	if (likely((s64)(rq->clock - cfs_rq->runtime_expires) < 0))
@@ -3164,6 +3165,13 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
 			return;
 		}
 
+		/*
+		 * Don't schedule slices shorter than 10000ns, that just
+		 * doesn't make sense. Rely on vruntime for fairness.
+		 */
+		if (rq->curr != p)
+			delta = max_t(s64, 10000LL, delta);
+
 		hrtick_start(rq, delta);
 	}
 }
@@ -3359,6 +3367,23 @@ static unsigned long cpu_avg_load_per_task(int cpu)
 	return 0;
 }
 
+static void record_wakee(struct task_struct *p)
+{
+	/*
+	 * Rough decay (wiping) for cost saving, don't worry
+	 * about the boundary, really active task won't care
+	 * about the loss.
+	 */
+	if (jiffies > current->wakee_flip_decay_ts + HZ) {
+		current->wakee_flips = 0;
+		current->wakee_flip_decay_ts = jiffies;
+	}
+
+	if (current->last_wakee != p) {
+		current->last_wakee = p;
+		current->wakee_flips++;
+	}
+}
 
 static void task_waking_fair(struct task_struct *p)
 {
@@ -3379,6 +3404,7 @@ static void task_waking_fair(struct task_struct *p)
 #endif
 
 	se->vruntime -= min_vruntime;
+	record_wakee(p);
 }
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -3497,6 +3523,28 @@ static inline unsigned long effective_load(struct task_group *tg, int cpu,
 
 #endif
 
+static int wake_wide(struct task_struct *p)
+{
+	int factor = this_cpu_read(sd_llc_size);
+
+	/*
+	 * Yeah, it's the switching-frequency, could means many wakee or
+	 * rapidly switch, use factor here will just help to automatically
+	 * adjust the loose-degree, so bigger node will lead to more pull.
+	 */
+	if (p->wakee_flips > factor) {
+		/*
+		 * wakee is somewhat hot, it needs certain amount of cpu
+		 * resource, so if waker is far more hot, prefer to leave
+		 * it alone.
+		 */
+		if (current->wakee_flips > (factor * p->wakee_flips))
+			return 1;
+	}
+
+	return 0;
+}
+
 static int wake_affine(struct sched_domain *sd, struct task_struct *p, int sync)
 {
 	s64 this_load, load;
@@ -3505,6 +3553,13 @@ static int wake_affine(struct sched_domain *sd, struct task_struct *p, int sync)
 	struct task_group *tg;
 	unsigned long weight;
 	int balanced;
+
+	/*
+	 * If we wake multiple tasks be careful to not bounce
+	 * ourselves around too much.
+	 */
+	if (wake_wide(p))
+		return 0;
 
 	idx	  = sd->wake_idx;
 	this_cpu  = smp_processor_id();
@@ -4767,6 +4822,19 @@ select_task_rq_fair(struct task_struct *p, int sd_flag, int wake_flags)
 	if (p->nr_cpus_allowed == 1)
 		return prev_cpu;
 
+#ifdef CONFIG_SCHED_HMP
+	/* always put non-kernel forking tasks on a big domain */
+	if (unlikely(sd_flag & SD_BALANCE_FORK) && hmp_task_should_forkboost(p)) {
+		new_cpu = hmp_select_faster_cpu(p, prev_cpu);
+		if (new_cpu != NR_CPUS) {
+			hmp_next_up_delay(&p->se, new_cpu);
+			return new_cpu;
+ 		}
+		/* failed to perform HMP fork balance, use normal balance */
+		new_cpu = cpu;
+	}
+#endif
+
 	if (sd_flag & SD_BALANCE_WAKE) {
 		if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
 			want_affine = 1;
@@ -5913,7 +5981,8 @@ fix_small_capacity(struct sched_domain *sd, struct sched_group *group)
  */
 static inline void update_sg_lb_stats(struct lb_env *env,
 			struct sched_group *group, int load_idx,
-			int local_group, int *balance, struct sg_lb_stats *sgs)
+			int local_group, int *balance, struct sg_lb_stats *sgs,
+			bool *overload)
 {
 	unsigned long nr_running, max_nr_running, min_nr_running;
 	unsigned long load, max_cpu_load, min_cpu_load;
@@ -5960,6 +6029,10 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 		sgs->group_load += load;
 		sgs->sum_nr_running += nr_running;
 		sgs->sum_weighted_load += weighted_cpuload(i);
+
+		if (rq->nr_running > 1)
+			*overload = true;
+
 		if (idle_cpu(i))
 			sgs->idle_cpus++;
 	}
@@ -6064,6 +6137,7 @@ static inline void update_sd_lb_stats(struct lb_env *env,
 	struct sched_group *sg = env->sd->groups;
 	struct sg_lb_stats sgs;
 	int load_idx, prefer_sibling = 0;
+	bool overload = false;
 
 	if (child && child->flags & SD_PREFER_SIBLING)
 		prefer_sibling = 1;
@@ -6075,7 +6149,8 @@ static inline void update_sd_lb_stats(struct lb_env *env,
 
 		local_group = cpumask_test_cpu(env->dst_cpu, sched_group_cpus(sg));
 		memset(&sgs, 0, sizeof(sgs));
-		update_sg_lb_stats(env, sg, load_idx, local_group, balance, &sgs);
+		update_sg_lb_stats(env, sg, load_idx, local_group, balance, &sgs,
+						&overload);
 
 		if (local_group && !(*balance))
 			return;
@@ -6117,6 +6192,12 @@ static inline void update_sd_lb_stats(struct lb_env *env,
 
 		sg = sg->next;
 	} while (sg != env->sd->groups);
+
+	if (!env->sd->parent) {
+		/* update overload indicator if we are at root domain */
+		if (env->dst_rq->rd->overload != overload)
+			env->dst_rq->rd->overload = overload;
+	}
 }
 
 /**
@@ -6728,7 +6809,8 @@ void idle_balance(int this_cpu, struct rq *this_rq)
 
 	this_rq->idle_stamp = this_rq->clock;
 
-	if (this_rq->avg_idle < sysctl_sched_migration_cost)
+	if (this_rq->avg_idle < sysctl_sched_migration_cost ||
+	    !this_rq->rd->overload)
 		return;
 
 	/*
@@ -6874,12 +6956,16 @@ static int nohz_test_cpu(int cpu)
  * Decide if the tasks on the busy CPUs in the
  * littlest domain would benefit from an idle balance
  */
-static int hmp_packing_ilb_needed(int cpu)
+static int hmp_packing_ilb_needed(int cpu, int ilb_needed)
 {
 	struct hmp_domain *hmp;
-	/* always allow ilb on non-slowest domain */
+	/* allow previous decision on non-slowest domain */
 	if (!hmp_cpu_is_slowest(cpu))
-		return 1;
+		return ilb_needed;
+
+	/* if disabled, use normal ILB behaviour */
+	if (!hmp_packing_enabled)
+		return ilb_needed;
 
 	hmp = hmp_cpu_domain(cpu);
 	for_each_cpu_and(cpu, &hmp->cpus, nohz.idle_cpus_mask) {
@@ -6891,19 +6977,34 @@ static int hmp_packing_ilb_needed(int cpu)
 }
 #endif
 
+DEFINE_PER_CPU(cpumask_var_t, ilb_tmpmask);
+
 static inline int find_new_ilb(int call_cpu)
 {
 	int ilb = cpumask_first(nohz.idle_cpus_mask);
 #ifdef CONFIG_SCHED_HMP
-	int ilb_needed = 1;
+	int ilb_needed = 0;
+	int cpu;
+	struct cpumask* tmp = per_cpu(ilb_tmpmask, smp_processor_id());
 
 	/* restrict nohz balancing to occur in the same hmp domain */
 	ilb = cpumask_first_and(nohz.idle_cpus_mask,
 			&((struct hmp_domain *)hmp_cpu_domain(call_cpu))->cpus);
 
+	/* check to see if it's necessary within this domain */
+	cpumask_andnot(tmp,
+			&((struct hmp_domain *)hmp_cpu_domain(call_cpu))->cpus,
+			nohz.idle_cpus_mask);
+	for_each_cpu(cpu, tmp) {
+		if (cpu_rq(cpu)->nr_running > 1) {
+			ilb_needed = 1;
+			break;
+		}
+	}
+
 #ifdef CONFIG_SCHED_HMP_LITTLE_PACKING
 	if (ilb < nr_cpu_ids)
-		ilb_needed = hmp_packing_ilb_needed(ilb);
+		ilb_needed = hmp_packing_ilb_needed(ilb, ilb_needed);
 #endif
 
 	if (ilb_needed && ilb < nr_cpu_ids && idle_cpu(ilb))
