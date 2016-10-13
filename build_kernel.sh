@@ -39,6 +39,7 @@ CONFIG_DIR=arch/arm64/configs
 CONFIG=hacker_defconfig
 CONFIG_G920F=exynos7420-zeroflte_defconfig
 CONFIG_G925F=exynos7420-zerolte_defconfig
+CONFIG_UNIFICATION=unification_defconfig 
 DEVICE_VER_G920F=`sed -n '17p' thehacker911`
 DEVICE_VER_G925F=`sed -n '18p' thehacker911`
 HACKER_VER_920F="$BASE_VER$DEVICE_VER_G920F$VER"
@@ -454,6 +455,25 @@ BUILD_KERNEL_G925FWSM()
 	echo ""
 }
 
+BUILD_KERNEL_UNIFICATION()
+{	
+	CLEAN
+	echo ""
+	echo "=============================================="
+	echo "START: BUILD_KERNEL"
+	echo "=============================================="
+	echo ""
+	echo "$HACKER_VER"
+	export LOCALVERSION=-`echo $HACKER_VER`
+	BUILD_BASE
+	START_BUILD
+	echo ""
+	echo "================================="
+	echo "END: BUILD_KERNEL"
+	echo "================================="
+	echo ""
+}
+
 REPACK_KERNEL_G920F()
 {	
 	echo ""
@@ -651,6 +671,62 @@ REPACK_KERNEL_G925FWSM()
 	      echo "Making cleaning ..."
 	      cd ..
 	      rm dt/$DT_G925F
+	      rm boot.img
+	      rm Image
+	      rm zip_files/kernel/boot.img
+	      rm boot/zImage
+	      rm boot/dt.img
+	      cd $KERNEL_DIR
+	      CHANGELOG
+	      echo "All Done!"
+	
+	      echo ""
+	      echo "================================="
+	      echo "END: REPACK_KERNEL"
+	      echo "================================="
+	      echo ""
+	      
+	else
+	
+	      echo ""
+	      echo "================================="
+	      echo "END: FAIL KERNEL BUILD!"
+	      echo "================================="
+	      echo ""
+	      exit 0;
+	fi;
+	
+}
+
+REPACK_KERNEL_UNIFICATION()
+{	
+	echo ""
+	echo "=============================================="
+	echo "START: REPACK_KERNEL"
+	echo "=============================================="
+	echo ""
+	      echo "$KERNEL_NAME" 
+	if [ -e $BUILD_KERNEL_DIR/arch/arm64/boot/Image ]; then
+	      cp -r $KERNEL_ZIMG $BOOTIMG_DIR_2/Image
+	      cd build_image
+	      mkdir backup_image
+	      cp -r Image backup_image/unificationzImage
+	      cp -r Image boot/zImage
+	      rm output_kernel/*.zip
+	      echo "Making boot.img ..."
+	      $DTBTOOL -o dt.img -s $BOARD_KERNEL_PAGESIZE -p ../scripts/dtc/ ../arch/arm64/boot/dts/ | sleep 1	      
+	      chmod a+r dt.img
+	      cp boot/dt.img
+	      cp dt.img backup_image/unification-dt.img
+	      ./mkboot boot boot.img	      
+	      echo "Making zip ..."
+	      SEANDROIDENFORCE
+	      cp $BOOTIMG $FLASH_ZIP_FILES/kernel/boot.img
+	      cd $FLASH_ZIP_FILES
+	      zip -r $KERNEL_NAME.zip META-INF system kernel data
+	      mv $KERNEL_NAME.zip $OUTPUT_DIR
+	      echo "Making cleaning ..."
+	      cd ..
 	      rm boot.img
 	      rm Image
 	      rm zip_files/kernel/boot.img
@@ -1064,7 +1140,41 @@ rm -rf ./buildg925fwsm.log
 	END_TIME=`date +%s`
 	let "ELAPSED_TIME=$END_TIME-$START_TIME"
 	echo "Total compile time is $ELAPSED_TIME seconds"
-) 2>&1	 | tee -a ./buildg920fwsm.log
+) 2>&1	 | tee -a ./buildg925fwsm.log
+}
+
+UNIFICATION()
+{
+rm -rf ./UNIFICATION.log
+(
+	START_TIME=`date +%s`
+	BUILD_DATE=`date +%m-%d-%Y`
+        echo ""
+        echo "Build UNIFICATION with sound mod"
+        sleep 2
+        rm -rf $BI_DIR/dt/$DT_UNIFICATION
+        rm -rf $BI_DIR/boot
+	SOUND_BASE_CLEAN
+        cp $KERNEL_DIR/build/boot/boot-g920f.img $BI_DIR/boot.img
+        cd $BI_DIR
+        ./mkboot boot.img boot
+	rm boot.img
+	rm Image
+	rm zip_files/kernel/boot.img
+	rm boot/zImage
+	rm boot/dt.img	
+        cd $KERNEL_DIR
+        cp $KERNEL_DIR/$CONFIG_DIR/$CONFIG_UNIFICATION $KERNEL_DIR/$CONFIG_DIR/$CONFIG
+	WITHSOUNDMOD
+	PATCH_RAMDISK
+        sleep 1
+	BUILD_KERNEL_UNIFICATION
+	REPACK_KERNEL_UNIFICATION
+
+	END_TIME=`date +%s`
+	let "ELAPSED_TIME=$END_TIME-$START_TIME"
+	echo "Total compile time is $ELAPSED_TIME seconds"
+) 2>&1	 | tee -a ./UNIFICATION.log
 }
 
 BUILD_KERNEL_MENU()
@@ -1076,11 +1186,12 @@ while true; do
     echo "b = Build G920F without sound mod"
     echo "c = Build G925F with sound mod"
     echo "d = Build G925F without sound mod"
+    echo "e = Unification Build"
     echo ""
     echo "q = Back to Main Menu"
     echo ""
-    read -p "Do you wish to build? = " abcdq
-    case $abcdq in
+    read -p "Do you wish to build? = " abcdeq
+    case $abcdeq in
         [Aa]* )
         G920F;;
         
@@ -1092,6 +1203,9 @@ while true; do
         
         [Dd]* )
         G925FWSM;;
+        
+        [Ee]* )
+        UNIFICATION;;
             
         [Qq]* )
         MAIN_MENU;;
