@@ -4,8 +4,7 @@ SUBLEVEL = 103
 EXTRAVERSION =
 NAME = TOSSUG Baby Fish
 
-#TOOLCHAIN_DIR = $(CURDIR)/toolchain/UBERTC-aarch64-linux-android-5.3/bin/aarch64-linux-android-
-TOOLCHAIN_DIR = /home/builder/toolchains/6.0/bin/aarch64-linux-android-
+TOOLCHAIN_DIR =/home/builder/toolchains/6.0/bin/aarch64-linux-android-
 
 ifdef CONFIG_WITH_CCACHE
 ccache := ccache
@@ -173,7 +172,7 @@ export srctree objtree VPATH
 # SUBARCH tells the usermode build what the underlying arch is.  That is set
 # first, and if a usermode build is happening, the "ARCH=um" on the command
 # line overrides the setting of ARCH below.  If a native build is happening,
-# then ARCH is assigned, getting whatever value it gets normally, and 
+# then ARCH is assigned, getting whatever value it gets normally, and
 # SUBARCH is subsequently ignored.
 
 SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
@@ -206,6 +205,7 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 #ARCH		?= $(SUBARCH)
 #CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
 ARCH		= arm64
+
 ifdef CONFIG_WITH_CCACHE
 CROSS_COMPILE = $(CCACHE) $(TOOLCHAIN_DIR)
 else
@@ -312,7 +312,7 @@ export KBUILD_CHECKSRC KBUILD_SRC KBUILD_EXTMOD
 #         cmd_cc_o_c       = $(CC) $(c_flags) -c -o $@ $<
 #
 # If $(quiet) is empty, the whole command will be printed.
-# If it is set to "quiet_", only the short version will be printed. 
+# If it is set to "quiet_", only the short version will be printed.
 # If it is set to "silent_", nothing will be printed at all, since
 # the variable $(silent_cmd_cc_o_c) doesn't exist.
 #
@@ -354,17 +354,20 @@ include $(srctree)/scripts/Kbuild.include
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
 ifdef CONFIG_WITH_CCACHE
-	ifdef CONFIG_WITH_GRAPHITE
+ifdef CONFIG_WITH_GRAPHITE
 		CC		= $(CCACHE) $(GRAPHITE) $(CROSS_COMPILE)gcc
 	else
 		CC		= $(CCACHE) $(CROSS_COMPILE)gcc	
 	endif
 else
-	ifdef CONFIG_WITH_GRAPHITE
+		CC		= $(CCACHE) $(CROSS_COMPILE)gcc
+endif
+else
+ifdef CONFIG_WITH_GRAPHITE
 		CC		= $(GRAPHITE) $(CROSS_COMPILE)gcc
-	else
+else
 		CC		= $(CROSS_COMPILE)gcc
-	endif
+endif
 endif
 ifdef CONFIG_WITH_GRAPHITE
 CPP		= $(GRAPHITE) $(CC) -E
@@ -396,17 +399,17 @@ endif
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
 ifdef CONFIG_WITH_GRAPHITE
-CFLAGS_MODULE   = $(GRAPHITE) 
-AFLAGS_MODULE   = $(GRAPHITE) 
-LDFLAGS_MODULE  = $(GRAPHITE) 
+CFLAGS_MODULE   = $(GRAPHITE)
+AFLAGS_MODULE   = $(GRAPHITE)
+LDFLAGS_MODULE  = $(GRAPHITE)
 CFLAGS_KERNEL	= $(GRAPHITE) -fsingle-precision-constant
-AFLAGS_KERNEL	= $(GRAPHITE) 
+AFLAGS_KERNEL	= $(GRAPHITE)
 else
-CFLAGS_MODULE   = 
-AFLAGS_MODULE   = 
-LDFLAGS_MODULE  = 
+CFLAGS_MODULE   =
+AFLAGS_MODULE   =
+LDFLAGS_MODULE  =
 CFLAGS_KERNEL	= -fsingle-precision-constant
-AFLAGS_KERNEL	= 
+AFLAGS_KERNEL	=
 endif
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
@@ -435,7 +438,7 @@ KBUILD_CFLAGS   := -DNDEBUG $(GRAPHITE) -w -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -finline-functions -fno-common \
 		   -Werror-implicit-function-declaration -fno-pic \
 		   -Wno-format-security -ffast-math \
-		   -fno-delete-null-pointer-checks \
+ 		   -fno-delete-null-pointer-checks \
 		   -fdiagnostics-show-option \
 		   -pipe  -funswitch-loops -fpredictive-commoning -fgcse-after-reload \
 		   -ftree-loop-distribution -ftree-loop-if-convert -fivopts -fipa-pta -fira-hoist-pressure \
@@ -465,6 +468,24 @@ KBUILD_AFLAGS   := -D__ASSEMBLY__
 KBUILD_AFLAGS_MODULE  := -DMODULE
 KBUILD_CFLAGS_MODULE  := -DMODULE
 KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
+
+# GCC 6.0 Warnings
+KBUILD_CFLAGS		+= -Wno-error=unused-const-variable \
+									 -Wno-error=unused-function		\
+		   				 		 -Wno-error=unused-but-set-variable	\
+									 -Wno-error=unused-value \
+									 -Wno-error=unused-result	\
+									 -Wno-error=unused-local-typedefs \
+									 -Wno-error=unused-parameter \
+									 -Wno-error=unused-but-set-parameter \
+									 -Wno-error=unused-variable \
+									 -Wno-maybe-uninitialized
+
+# GCC 6.0 Errors
+KBUILD_CFLAGS	  += -Wno-error=tautological-compare \
+									 -Wno-error=misleading-indentation \
+									 -Wno-error=overflow \
+									 -Wno-error=array-bounds
 
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
 KERNELRELEASE = $(shell cat include/config/kernel.release 2> /dev/null)
@@ -658,7 +679,7 @@ all: vmlinux
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
 else
-KBUILD_CFLAGS	+= -Ofast $(call cc-disable-warning,maybe-uninitialized,)
+KBUILD_CFLAGS	+= -Ofast $(call cc-disable-warning,maybe-uninitialized,) 
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
@@ -888,7 +909,7 @@ ifdef CONFIG_BUILD_DOCSRC
 endif
 	+$(call if_changed,link-vmlinux)
 
-# The actual objects are generated when descending, 
+# The actual objects are generated when descending,
 # make sure no implicit rule kicks in
 $(sort $(vmlinux-deps)): $(vmlinux-dirs) ;
 
@@ -1497,7 +1518,7 @@ endif
 	$(build)=$(build-dir) $(@:.ko=.o)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
 
-# FIXME Should go into a make.lib or something 
+# FIXME Should go into a make.lib or something
 # ===========================================================================
 
 quiet_cmd_rmdirs = $(if $(wildcard $(rm-dirs)),CLEAN   $(wildcard $(rm-dirs)))
