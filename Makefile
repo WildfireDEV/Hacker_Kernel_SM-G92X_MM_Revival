@@ -447,7 +447,7 @@ KBUILD_CFLAGS   := -DNDEBUG $(GRAPHITE) -w -Wstrict-prototypes -Wno-trigraphs \
 		   -Werror -Wno-error=unused-variable -Wno-error=unused-function \
 		   -std=gnu89 -Wno-discarded-array-qualifiers -Wno-logical-not-parentheses -Wno-array-bounds -Wno-switch -Wno-unused-variable \
 		   -march=armv8-a+crc -mtune=cortex-a57.cortex-a53 -mno-android -mcpu=cortex-a57.cortex-a53 \
-		   -finline-functions -funswitch-loops -fpredictive-commoning -fgcse-after-reload -ftreel-vectorize -ftree-partial-pre -fipa-cp-clone
+		   -finline-functions -funswitch-loops -fpredictive-commoning -fgcse-after-reload -ftree-vectorize -ftree-partial-pre -fipa-cp-clone
 else
 KBUILD_CFLAGS   := -DNDEBUG -w -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -finline-functions -fno-common \
@@ -462,7 +462,7 @@ KBUILD_CFLAGS   := -DNDEBUG -w -Wstrict-prototypes -Wno-trigraphs \
 		   -Werror -Wno-error=unused-variable -Wno-error=unused-function \
 		   -std=gnu89 -Wno-discarded-array-qualifiers -Wno-logical-not-parentheses -Wno-array-bounds -Wno-switch -Wno-unused-variable \
 		   -march=armv8-a+crc -mtune=cortex-a57.cortex-a53 -mno-android -mcpu=cortex-a57.cortex-a53 \
- 		   -finline-functions -funswitch-loops -fpredictive-commoning -fgcse-after-reload -ftreel-vectorize -ftree-partial-pre -fipa-cp-clone
+ 		   -finline-functions -funswitch-loops -fpredictive-commoning -fgcse-after-reload -ftree-vectorize -ftree-partial-pre -fipa-cp-clone
 endif
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
