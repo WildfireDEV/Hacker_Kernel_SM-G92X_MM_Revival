@@ -173,7 +173,7 @@ export srctree objtree VPATH
 # SUBARCH tells the usermode build what the underlying arch is.  That is set
 # first, and if a usermode build is happening, the "ARCH=um" on the command
 # line overrides the setting of ARCH below.  If a native build is happening,
-# then ARCH is assigned, getting whatever value it gets normally, and 
+# then ARCH is assigned, getting whatever value it gets normally, and
 # SUBARCH is subsequently ignored.
 
 SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
@@ -312,7 +312,7 @@ export KBUILD_CHECKSRC KBUILD_SRC KBUILD_EXTMOD
 #         cmd_cc_o_c       = $(CC) $(c_flags) -c -o $@ $<
 #
 # If $(quiet) is empty, the whole command will be printed.
-# If it is set to "quiet_", only the short version will be printed. 
+# If it is set to "quiet_", only the short version will be printed.
 # If it is set to "silent_", nothing will be printed at all, since
 # the variable $(silent_cmd_cc_o_c) doesn't exist.
 #
@@ -357,7 +357,7 @@ ifdef CONFIG_WITH_CCACHE
 	ifdef CONFIG_WITH_GRAPHITE
 		CC		= $(CCACHE) $(GRAPHITE) $(CROSS_COMPILE)gcc
 	else
-		CC		= $(CCACHE) $(CROSS_COMPILE)gcc	
+		CC		= $(CCACHE) $(CROSS_COMPILE)gcc
 	endif
 else
 	ifdef CONFIG_WITH_GRAPHITE
@@ -396,17 +396,17 @@ endif
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
 ifdef CONFIG_WITH_GRAPHITE
-CFLAGS_MODULE   = $(GRAPHITE) 
-AFLAGS_MODULE   = $(GRAPHITE) 
-LDFLAGS_MODULE  = $(GRAPHITE) 
+CFLAGS_MODULE   = $(GRAPHITE)
+AFLAGS_MODULE   = $(GRAPHITE)
+LDFLAGS_MODULE  = $(GRAPHITE)
 CFLAGS_KERNEL	= $(GRAPHITE) -fsingle-precision-constant
-AFLAGS_KERNEL	= $(GRAPHITE) 
+AFLAGS_KERNEL	= $(GRAPHITE)
 else
-CFLAGS_MODULE   = 
-AFLAGS_MODULE   = 
-LDFLAGS_MODULE  = 
+CFLAGS_MODULE   =
+AFLAGS_MODULE   =
+LDFLAGS_MODULE  =
 CFLAGS_KERNEL	= -fsingle-precision-constant
-AFLAGS_KERNEL	= 
+AFLAGS_KERNEL	=
 endif
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
@@ -430,6 +430,8 @@ LINUXINCLUDE    := \
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
+
+
 ifdef CONFIG_WITH_GRAPHITE
 KBUILD_CFLAGS   := -DNDEBUG $(GRAPHITE) -w -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -finline-functions -fno-common \
@@ -443,7 +445,7 @@ KBUILD_CFLAGS   := -DNDEBUG $(GRAPHITE) -w -Wstrict-prototypes -Wno-trigraphs \
 		   -fbranch-target-load-optimize -fsingle-precision-constant \
 		   -Werror -Wno-error=unused-variable -Wno-error=unused-function \
 		   -std=gnu89 -Wno-discarded-array-qualifiers -Wno-logical-not-parentheses -Wno-array-bounds -Wno-switch -Wno-unused-variable \
-		   -march=armv8-a+crc -mtune=cortex-a57.cortex-a53
+		   -march=armv8-a+crc -mtune=cortex-a57.cortex-a53 -mno-android -mcpu=cortex-a57.cortex-a53
 else
 KBUILD_CFLAGS   := -DNDEBUG -w -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -finline-functions -fno-common \
@@ -457,7 +459,7 @@ KBUILD_CFLAGS   := -DNDEBUG -w -Wstrict-prototypes -Wno-trigraphs \
 		   -fbranch-target-load-optimize -fsingle-precision-constant \
 		   -Werror -Wno-error=unused-variable -Wno-error=unused-function \
 		   -std=gnu89 -Wno-discarded-array-qualifiers -Wno-logical-not-parentheses -Wno-array-bounds -Wno-switch -Wno-unused-variable \
-		   -march=armv8-a+crc -mtune=cortex-a57.cortex-a53
+		   -march=armv8-a+crc -mtune=cortex-a57.cortex-a53 -mno-android -mcpu=cortex-a57.cortex-a53
 endif
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
@@ -888,7 +890,7 @@ ifdef CONFIG_BUILD_DOCSRC
 endif
 	+$(call if_changed,link-vmlinux)
 
-# The actual objects are generated when descending, 
+# The actual objects are generated when descending,
 # make sure no implicit rule kicks in
 $(sort $(vmlinux-deps)): $(vmlinux-dirs) ;
 
@@ -1497,7 +1499,7 @@ endif
 	$(build)=$(build-dir) $(@:.ko=.o)
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
 
-# FIXME Should go into a make.lib or something 
+# FIXME Should go into a make.lib or something
 # ===========================================================================
 
 quiet_cmd_rmdirs = $(if $(wildcard $(rm-dirs)),CLEAN   $(wildcard $(rm-dirs)))
