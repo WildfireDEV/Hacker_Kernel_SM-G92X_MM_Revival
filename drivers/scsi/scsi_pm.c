@@ -17,13 +17,11 @@
 #include "scsi_priv.h"
 
 static int scsi_dev_type_suspend(struct device *dev, int (*cb)(struct device *))
-
-
 {
 	int err;
+
 	err = scsi_device_quiesce(to_scsi_device(dev));
 	if (err == 0) {
-
 		if (cb) {
 			err = cb(dev);
 			if (err)
@@ -33,10 +31,6 @@ static int scsi_dev_type_suspend(struct device *dev, int (*cb)(struct device *))
 	dev_dbg(dev, "scsi suspend: %d\n", err);
 	return err;
 }
-
-
-
-
 
 static int scsi_dev_type_resume(struct device *dev, int (*cb)(struct device *))
 {

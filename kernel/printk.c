@@ -45,7 +45,6 @@
 #include <linux/poll.h>
 #include <linux/irq_work.h>
 #include <linux/utsname.h>
-#include "printk_interface.h"
 
 #include <asm/uaccess.h>
 
@@ -116,7 +115,7 @@ static struct console *exclusive_console;
  */
 struct console_cmdline
 {
-	char	name[16];			/* Name of the driver	    */
+	char	name[8];			/* Name of the driver	    */
 	int	index;				/* Minor dev. to use	    */
 	char	*options;			/* Options for the driver   */
 #ifdef CONFIG_A11Y_BRAILLE_CONSOLE
@@ -1625,10 +1624,6 @@ asmlinkage int vprintk_emit(int facility, int level,
 	int printed_len = 0;
 	static bool prev_new_line = true;
 
-	// if printk mode is disabled, terminate instantly
-	if (printk_mode == 0)
-			return 0;
-
 	boot_delay_msec(level);
 	printk_delay();
 
@@ -1830,10 +1825,6 @@ asmlinkage int printk(const char *fmt, ...)
 {
 	va_list args;
 	int r;
-
-	// if printk mode is disabled, terminate instantly
-	if (printk_mode == 0)
-		return 0;
 
 #ifdef CONFIG_KGDB_KDB
 	if (unlikely(kdb_trap_printk)) {
@@ -2454,8 +2445,6 @@ void register_console(struct console *newcon)
 	 */
 	for (i = 0; i < MAX_CMDLINECONSOLES && console_cmdline[i].name[0];
 			i++) {
-		BUILD_BUG_ON(sizeof(console_cmdline[i].name) !=
-			     sizeof(newcon->name));
 		if (strcmp(console_cmdline[i].name, newcon->name) != 0)
 			continue;
 		if (newcon->index >= 0 &&
