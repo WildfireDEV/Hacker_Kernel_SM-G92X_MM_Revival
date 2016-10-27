@@ -1127,13 +1127,8 @@ static int __rb_allocate_pages(int nr_pages, struct list_head *pages, int cpu)
 
 	for (i = 0; i < nr_pages; i++) {
 		struct page *page;
-		/*
-		 * __GFP_NORETRY flag makes sure that the allocation fails
-		 * gracefully without invoking oom-killer and the system is
-		 * not destabilized.
-		 */
 		bpage = kzalloc_node(ALIGN(sizeof(*bpage), cache_line_size()),
-				    GFP_KERNEL | __GFP_NORETRY,
+				    GFP_KERNEL,
 				    cpu_to_node(cpu));
 		if (!bpage)
 			goto free_pages;
@@ -1141,7 +1136,7 @@ static int __rb_allocate_pages(int nr_pages, struct list_head *pages, int cpu)
 		list_add(&bpage->list, pages);
 
 		page = alloc_pages_node(cpu_to_node(cpu),
-					GFP_KERNEL | __GFP_NORETRY, 0);
+					GFP_KERNEL, 0);
 		if (!page)
 			goto free_pages;
 		bpage->page = page_address(page);
@@ -1948,6 +1943,12 @@ rb_set_commit_to_write(struct ring_buffer_per_cpu *cpu_buffer)
 		goto again;
 }
 
+static void rb_reset_reader_page(struct ring_buffer_per_cpu *cpu_buffer)
+{
+	cpu_buffer->read_stamp = cpu_buffer->reader_page->page->time_stamp;
+	cpu_buffer->reader_page->read = 0;
+}
+
 static void rb_inc_iter(struct ring_buffer_iter *iter)
 {
 	struct ring_buffer_per_cpu *cpu_buffer = iter->cpu_buffer;
@@ -2644,7 +2645,7 @@ static DEFINE_PER_CPU(unsigned int, current_context);
 
 static __always_inline int trace_recursive_lock(void)
 {
-	unsigned int val = __this_cpu_read(current_context);
+	unsigned int val = this_cpu_read(current_context);
 	int bit;
 
 	if (in_interrupt()) {
@@ -2661,17 +2662,18 @@ static __always_inline int trace_recursive_lock(void)
 		return 1;
 
 	val |= (1 << bit);
-	__this_cpu_write(current_context, val);
+	this_cpu_write(current_context, val);
 
 	return 0;
 }
 
 static __always_inline void trace_recursive_unlock(void)
 {
-	unsigned int val = __this_cpu_read(current_context);
+	unsigned int val = this_cpu_read(current_context);
 
-	val &= val & (val - 1);
-	__this_cpu_write(current_context, val);
+	val--;
+	val &= this_cpu_read(current_context);
+	this_cpu_write(current_context, val);
 }
 
 #else
@@ -3585,7 +3587,7 @@ rb_get_reader_page(struct ring_buffer_per_cpu *cpu_buffer)
 
 	/* Finally update the reader page to the new head */
 	cpu_buffer->reader_page = reader;
-	cpu_buffer->reader_page->read = 0;
+	rb_reset_reader_page(cpu_buffer);
 
 	if (overwrite != cpu_buffer->last_overrun) {
 		cpu_buffer->lost_events = overwrite - cpu_buffer->last_overrun;
@@ -3595,10 +3597,6 @@ rb_get_reader_page(struct ring_buffer_per_cpu *cpu_buffer)
 	goto again;
 
  out:
-	/* Update the read_stamp on the first event */
-	if (reader && reader->read == 0)
-		cpu_buffer->read_stamp = reader->page->time_stamp;
-
 	arch_spin_unlock(&cpu_buffer->lock);
 	local_irq_restore(flags);
 
@@ -4378,7 +4376,7 @@ void *ring_buffer_alloc_read_page(struct ring_buffer *buffer, int cpu)
 	struct page *page;
 
 	page = alloc_pages_node(cpu_to_node(cpu),
-				GFP_KERNEL | __GFP_NORETRY, 0);
+				GFP_KERNEL, 0);
 	if (!page)
 		return NULL;
 

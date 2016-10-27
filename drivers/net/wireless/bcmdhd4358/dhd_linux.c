@@ -83,9 +83,6 @@
 #include <dhd_dbg.h>
 #ifdef CONFIG_HAS_WAKELOCK
 #include <linux/wakelock.h>
-#include <linux/moduleparam.h>
-static int wakelock_timeout = 1;
-module_param(wakelock_timeout, int, 0755);
 #endif
 #ifdef WL_CFG80211
 #include <wl_cfg80211.h>
@@ -164,11 +161,6 @@ extern void dhd_dump_eapol_4way_message(char *dump_data, bool direction);
 #endif
 
 #include <wl_android.h>
-
-#include <linux/moduleparam.h>
-
-static int wl_divide = 1;
-module_param(wl_divide, int, 0644);
 
 /* Maximum STA per radio */
 #define DHD_MAX_STA     32
@@ -575,11 +567,7 @@ module_param(dhd_arp_enable, uint, 0);
 
 /* ARP offload agent mode : Enable ARP Host Auto-Reply and ARP Peer Auto-Reply */
 
-#if defined(CUSTOMER_HW4)
-uint dhd_arp_mode = ARP_OL_AGENT | ARP_OL_PEER_AUTO_REPLY | ARP_OL_SNOOP;
-#else
 uint dhd_arp_mode = ARP_OL_AGENT | ARP_OL_PEER_AUTO_REPLY;
-#endif
 
 module_param(dhd_arp_mode, uint, 0);
 #endif /* ARP_OFFLOAD_SUPPORT */
@@ -9270,10 +9258,10 @@ int dhd_os_wake_lock_timeout(dhd_pub_t *pub)
 #ifdef CONFIG_HAS_WAKELOCK
 		if (dhd->wakelock_rx_timeout_enable)
 			wake_lock_timeout(&dhd->wl_rxwake,
-				msecs_to_jiffies(dhd->wakelock_rx_timeout_enable)/wl_divide);
+				msecs_to_jiffies(dhd->wakelock_rx_timeout_enable));
 		if (dhd->wakelock_ctrl_timeout_enable)
 			wake_lock_timeout(&dhd->wl_ctrlwake,
-				msecs_to_jiffies(dhd->wakelock_ctrl_timeout_enable)/wl_divide);
+				msecs_to_jiffies(dhd->wakelock_ctrl_timeout_enable));
 #endif
 		dhd->wakelock_rx_timeout_enable = 0;
 		dhd->wakelock_ctrl_timeout_enable = 0;
