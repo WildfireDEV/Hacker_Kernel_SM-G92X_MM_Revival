@@ -200,10 +200,6 @@ struct max77833_muic_data {
 	u8                              status5;
 	u8                              status6;
 
-#if defined(CONFIG_USB_EXTERNAL_NOTIFY)
-	/* USB Notifier */
-	struct notifier_block	usb_nb;
-#endif
 };
 
 /* For user popup when connect to OTG+Wireless PAD */

@@ -118,8 +118,7 @@ static int fimg2d_check_address_range(unsigned long addr, size_t size)
 
 	if (!vma) {
 		fimg2d_err("vma is invalid for %zd bytes@%#lx\n", size, addr);
-		up_read(&current->mm->mmap_sem);
-		return -EFAULT;
+		ret = -EFAULT;
 	}
 
 	if (vma->vm_end < addr + size) {

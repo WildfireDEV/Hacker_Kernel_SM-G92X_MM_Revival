@@ -1584,6 +1584,9 @@ SYSCALL_DEFINE2(umount, char __user *, name, int, flags)
 		goto dput_and_out;
 	if (!check_mnt(mnt))
 		goto dput_and_out;
+	retval = -EPERM;
+	if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))
+		goto dput_and_out;
 
 	retval = do_umount(mnt, flags);
 dput_and_out:
@@ -1687,11 +1690,8 @@ struct vfsmount *collect_mounts(struct path *path)
 {
 	struct mount *tree;
 	namespace_lock();
-	if (!check_mnt(real_mount(path->mnt)))
-		tree = ERR_PTR(-EINVAL);
-	else
-		tree = copy_tree(real_mount(path->mnt), path->dentry,
-				CL_COPY_ALL | CL_PRIVATE);
+	tree = copy_tree(real_mount(path->mnt), path->dentry,
+			 CL_COPY_ALL | CL_PRIVATE);
 	namespace_unlock();
 	if (IS_ERR(tree))
 		return ERR_CAST(tree);
@@ -2090,7 +2090,13 @@ static int do_remount(struct path *path, int flags, int mnt_flags,
 	if ((mnt->mnt.mnt_flags & MNT_LOCK_NODEV) &&
 #endif
 	    !(mnt_flags & MNT_NODEV)) {
-		return -EPERM;
+		/* Was the nodev implicitly added in mount? */
+		if ((mnt->mnt_ns->user_ns != &init_user_ns) &&
+		    !(sb->s_type->fs_flags & FS_USERNS_DEV_MOUNT)) {
+			mnt_flags |= MNT_NODEV;
+		} else {
+			return -EPERM;
+		}
 	}
 #ifdef CONFIG_RKP_NS_PROT
 	if ((mnt->mnt->mnt_flags & MNT_LOCK_NOSUID) &&
@@ -2621,6 +2627,36 @@ long do_mount(const char *dev_name, const char *dir_name,
 	if (data_page)
 		((char *)data_page)[PAGE_SIZE - 1] = 0;
 
+#ifdef CONFIG_RESTRICT_ROOTFS_SLAVE
+	/* Check if this is an attempt to mark "/" as recursive-slave. */
+	if (strcmp(dir_name, "/") == 0 && flags == (MS_SLAVE | MS_REC)) {
+		static const char storage[] = "/storage";
+		static const char source[]  = "/mnt/shell/emulated";
+		long res;
+
+		/* Mark /storage as recursive-slave instead. */
+		if ((res = do_mount(NULL, (char *)storage, NULL, (MS_SLAVE | MS_REC), NULL)) == 0) {
+			/* Unfortunately bind mounts from outside /storage may retain the
+			 * recursive-shared property (bug?).  This means any additional
+			 * namespace-specific bind mounts (e.g., /storage/emulated/0/Android/obb)
+			 * will also appear, shared in all namespaces, at their respective source
+			 * paths (e.g., /mnt/shell/emulated/0/Android/obb), possibly leading to
+			 * hundreds of /proc/mounts-visible bind mounts.  As a workaround, mark
+			 * /mnt/shell/emulated also as recursive-slave so that subsequent bind
+			 * mounts are confined to their namespaces. */
+			if ((res = do_mount(NULL, (char *)source, NULL, (MS_SLAVE | MS_REC), NULL)) == 0)
+				/* Both paths successfully marked as slave, leave the rest of the
+				 * filesystem hierarchy alone. */
+				return 0;
+			else
+				pr_warn("Failed to mount %s as MS_SLAVE: %ld\n", source, res);
+		} else {
+			pr_warn("Failed to mount %s as MS_SLAVE: %ld\n", storage, res);
+		}
+		/* Fallback: Mark rootfs as recursive-slave as requested. */
+	}
+#endif
+
 	/* ... and get the mountpoint */
 	retval = kern_path(dir_name, LOOKUP_FOLLOW, &path);
 	if (retval)
@@ -2634,8 +2670,8 @@ long do_mount(const char *dev_name, const char *dir_name,
 		goto dput_out;
 
 	/* Default to relatime unless overriden */
-	if (!(flags & MS_NOATIME))
-		mnt_flags |= MNT_RELATIME;
+	//if (!(flags & MS_NOATIME))
+	//	mnt_flags |= MNT_RELATIME;
 
 	/* Separate the per-mountpoint flags */
 	if (flags & MS_NOSUID)
@@ -2644,9 +2680,9 @@ long do_mount(const char *dev_name, const char *dir_name,
 		mnt_flags |= MNT_NODEV;
 	if (flags & MS_NOEXEC)
 		mnt_flags |= MNT_NOEXEC;
-	if (flags & MS_NOATIME)
+	//if (flags & MS_NOATIME)
 		mnt_flags |= MNT_NOATIME;
-	if (flags & MS_NODIRATIME)
+	//if (flags & MS_NODIRATIME)
 		mnt_flags |= MNT_NODIRATIME;
 	if (flags & MS_STRICTATIME)
 		mnt_flags &= ~(MNT_RELATIME | MNT_NOATIME);

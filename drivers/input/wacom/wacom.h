@@ -231,7 +231,6 @@ struct wacom_i2c {
 	struct mutex update_lock;
 	struct mutex irq_lock;
 	struct wake_lock fw_wakelock;
-	struct wake_lock det_wakelock;
 	struct device	*dev;
 	int irq;
 	int irq_pdct;

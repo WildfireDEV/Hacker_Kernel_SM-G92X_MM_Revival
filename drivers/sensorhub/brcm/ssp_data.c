@@ -118,7 +118,7 @@ static void get_timestamp(struct ssp_data *data, char *pchRcvDataFrame,
 				data->lastTimestamp[sensor_type] = data->timestamp + offset;
 				time_delta_ns = 0ULL;
 			} else {
-				if (data->timestamp + offset < data->lastTimestamp[sensor_type]) {
+				if (data->timestamp < data->lastTimestamp[sensor_type]) {
 					time_delta_ns = 0ULL;
 				} else {
 					time_delta_ns = data->timestamp + offset - data->lastTimestamp[sensor_type];
@@ -128,8 +128,7 @@ static void get_timestamp(struct ssp_data *data, char *pchRcvDataFrame,
 			if (time_delta_ns == 0ULL) {
 				// Don't report when time is 0.
 				data->skipEventReport = true;
-			} 
-			else if (time_delta_ns > (data->adDelayBuf[sensor_type] * 18ULL / 10ULL)) {
+			} else if (time_delta_ns > (data->adDelayBuf[sensor_type] * 18ULL / 10ULL)) {
 				int cnt = 0;
 				int i = 0;
 				cnt = time_delta_ns / (data->adDelayBuf[sensor_type]);
@@ -161,7 +160,6 @@ static void get_timestamp(struct ssp_data *data, char *pchRcvDataFrame,
 			// 80ms is magic number. reset time base.
 			offset = get_current_timestamp() - get_kernel_timestamp();
 			if (time_delta_ns == 0ULL || time_delta_ns == 1000ULL || time_delta_ns == 80000ULL) {
-				//pr_err("[SSP_TIM] %d delta %lld\n", sensor_type, time_delta_ns);
 				data->lastTimestamp[sensor_type] = data->timestamp - 15000000ULL + offset;
 				time_delta_ns = 0ULL;
 			}
@@ -170,11 +168,12 @@ static void get_timestamp(struct ssp_data *data, char *pchRcvDataFrame,
 				data->lastTimestamp[sensor_type] = data->timestamp + offset;
 			} else {
 				if (data->timestamp + offset > (1000000000ULL + data->lastTimestamp[sensor_type])) {
-					//pr_err("[SSP_INT] 1sec delay ls %lld irq %lld offset %lld\n", data->lastTimestamp[sensor_type], data->timestamp, offset);
 					data->lastTimestamp[sensor_type] = data->timestamp + offset;
+					//pr_err("[SSP_INT] last time small than 1 sec\n");
 				}
 				else
 					data->lastTimestamp[sensor_type] += time_delta_ns;
+
 
 #if 0 // future event issue
 				if(data->lastTimestamp[sensor_type] > get_current_timestamp())
@@ -450,26 +449,25 @@ void ssp_batch_resume_check(struct ssp_data *data)
 		
 		while(true) {
 			lastOffset = get_current_timestamp() - get_kernel_timestamp();
-			
-			if(resume_cnt == 3) {
-				//pr_err("[SSP_BAT] offset updated %lld, last %lld\n",data->lastOffset, lastOffset);
-				data->lastOffset = lastOffset;
-				break;
-			}
-			else if(data->lastOffset == 0) {
+			if(data->lastOffset == 0) {
 				usleep_range(10000,10000);
 				//pr_err("[SSP_BAT] data->lastOffset %lld\n", lastOffset);
 				data->lastOffset = get_current_timestamp() - get_kernel_timestamp();
 				//pr_err("[SSP_BAT] data->lastOffset %lld\n", data->lastOffset);
 				break;
 			}
-			else if((data->lastOffset > lastOffset) && (data->lastOffset < 5000000ULL + lastOffset)) {
+			if((data->lastOffset > lastOffset) && (data->lastOffset < 5000000ULL + lastOffset)) {
 				//pr_err("[SSP_BAT] offset same sleep %lld\n", lastOffset);
 				usleep_range(10000,10000);
 			}
 			else if((lastOffset > data->lastOffset) && (lastOffset < 5000000ULL + data->lastOffset)) {
 				//pr_err("[SSP_BAT] offset same sleep %lld\n", lastOffset);
 				usleep_range(10000,10000);
+			}
+			else if(resume_cnt == 10) {
+				//pr_err("[SSP_BAT] offset updated %lld, last %lld\n",data->lastOffset, lastOffset);
+				data->lastOffset = lastOffset;
+				break;
 			}
 			else {
 				//pr_err("[SSP_BAT] offset updated %lld, last %lld\n",data->lastOffset, lastOffset);
